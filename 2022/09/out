@@ -1,0 +1,58 @@
+moved 0 from 5,5 to 5,4
+
+##############
+#            # 0
+#            # 1
+#            # 2
+#            # 3
+#     H      # 4
+#     T      # 5
+#            # 6
+#            # 7
+#            # 8
+#            # 9
+#            # 10
+#            # 11
+##############
+ 000000000011 
+ 012345678901 
+
+moved 0 from 5,4 to 5,3
+
+##############
+#            # 0
+#            # 1
+#            # 2
+#     H      # 3
+#            # 4
+#            # 5
+#     T      # 6
+#            # 7
+#            # 8
+#            # 9
+#            # 10
+#            # 11
+##############
+ 000000000011 
+ 012345678901 
+
+F
+
+Failures:
+
+  1) RopeBridge moves tail with head
+     Failure/Error: expect(b.tail.y).to eql(8 - start_y)
+
+       expected: 4
+            got: 6
+
+       (compared using eql?)
+     # ./spec/rope_bridge_spec.rb:34:in `block (2 levels) in <top (required)>'
+
+Finished in 0.03948 seconds (files took 0.25155 seconds to load)
+1 example, 1 failure
+
+Failed examples:
+
+rspec ./spec/rope_bridge_spec.rb:28 # RopeBridge moves tail with head
+
