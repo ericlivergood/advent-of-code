@@ -1,10 +1,22 @@
 class MapPoint
-  attr_accessor :x
-  attr_accessor :y
+  attr_reader :x
+  attr_reader :y
+  attr_reader :height
+  attr_reader :neighbors
+  attr_reader :visited
+  attr_reader :distance
 
-  def initialize(x,y)
+  def initialize(x, y, height)
     @x = x
     @y = y
+    @height = height
+    @neighbors = []
+    @visited = false
+    @distance = nil
+  end
+
+  def add_neighbor(p)
+    @neighbors.push(p) if (p.height + 1) >= @height
   end
 
   def ==(p)
@@ -12,190 +24,103 @@ class MapPoint
   end
 
   def to_s
-    "#{@x},#{@y}"
-  end
-end
-
-class PersonLocation
-  attr_accessor :x
-  attr_accessor :y
-  attr_reader :path
-  attr_reader :history
-
-  def initialize(x, y, path=[])
-    @x = x
-    @y = y
-    @path = path
+    "#{@x+1},#{@y+1} | visited: #{@visited} | height: #{@height.chr} | distance: #{@distance} | neighbors: #{@neighbors.length}"
   end
 
-  def ==(p)
-    (@x == p.x) && (@y == p.y)
+  def set_tentative_distance(distance)
+    @distance = distance if (@distance.nil? || distance < @distance) && !@visited
   end
 
-  def move(direction)
-    x = @x
-    y = @y
-    case (direction)
-      when :up
-        y -= 1
-      when :down
-        y += 1
-      when :left
-        x -= 1
-      when :right
-        x += 1
-    end
-
-    if(@path.include?(MapPoint.new(x, y)))
-      #puts "  no backtracking."
-      return nil
-    else
-      path = [].concat(@path)
-      path.push(self)
-
-      puts "Moving #{direction} from #{@x},#{@y} to #{x},#{y}"
-      return PersonLocation.new(x, y, path)
-    end
+  def visit
+    #puts "Visited: #{self}"
+    @visited = true
   end
 
-  def visited?(direction)
-    x = @x
-    y = @y
-    case (direction)
-      when :up
-        y -= 1
-      when :down
-        y += 1
-      when :left
-        x -= 1
-      when :right
-        x += 1
-    end
-    return @path.include?(MapPoint.new(x, y))
-  end
-
-  def backtrack
-    return if @path.length == 0
-    last = @path.pop()
-    @x = last.x
-    @y = last.y
-    #puts "backtracked to #{@x},#{@y}"
+  def get_next
+    shortest = @neighbors.filter{|x| !x.visited }.sort_by {|x| x.distance}[0]
+    return [] if shortest.nil?
+    unvisited = @neighbors.filter{|x| x.distance == shortest.distance && !x.visited}
+    unvisited[0]
   end
 end
 
 
-# x,y #############
-# 0,0          5,0#
-#                 #
-#                 #
-#                 #
-# 0,5          5,5#
-###################
+# # x,y #############
+# # 0,0          5,0#
+# #                 #
+# #                 #
+# #                 #
+# # 0,5          5,5#
+# ###################
 
 class ElevationMap
-  attr_reader :viable_paths
+  attr_reader :all_points
   attr_reader :map
   attr_reader :current
   attr_reader :end
 
   def initialize(start_point, end_point, map)
-    @current = PersonLocation.new(start_point.x, start_point.y)
-    @end = end_point
-    @map = map
     @width = map.length
     @height = map[0].length
-    @viable_paths = []
-    @visited = Array.new(@width, Array.new(@height, 100000))
-    puts "#{start_point.x}, #{start_point.y}"
+    @all_points = []
+    init_map(map)
+    add_neighbors
+    @current = @map[start_point.x][start_point.y]
+    @current.set_tentative_distance(0)
+    @end = @map[end_point.x][end_point.y]
+    @optimal_path = []
   end
 
-  def navigate(direction)
-    current =  @current.move(direction)
-    #puts "new : #{@current.x}, #{@current.y}"
-    return if current.nil?
-    return if @visited[current.x][current.y] < current.path.length
-    puts 'navigated'
-    @current = current
-    @visited[@current.x][@current.y] = @current.path.length
+  def init_map(map)
+    @map = Array.new(@width)
+    (0..@width - 1).each{ |x| @map[x] = Array.new(@height, nil) }
 
-
-    if is_at_end?
-      #puts "Found end @ #{@current.x},#{@current.y}: #{@current.path.map{|x| x.to_s}}"
-      @viable_paths.push(@current)
-      return
-    end
-
-    explore
-  end
-
-  def explore
-    options = movement_options
-    #puts "Exploring from #{@current.x},#{@current.y} (#{map[@current.x][@current.y].chr}): #{options} (#{options.length})"
-    return if options.length == 0
-
-    current = @current
-    options.each do |m|
-      navigate(m)
-      @current = current
+    (0..@width - 1).each do |x|
+      (0..@height - 1).each do |y|
+        p = MapPoint.new(x, y, map[x][y])
+        @map[x][y] = p
+        @all_points.push(p)
+      end
     end
   end
 
-  def get_shortest_path_length
-    shortest = 1000000
-    @viable_paths.each do |p|
-      shortest = p.path.length if p.path.length < shortest
+  def add_neighbors
+    map = @map
+    (0..@width - 1).each do |x|
+      (0..@height - 1).each do |y|
+        map[x][y].add_neighbor(map[x + 1][y]) unless x >= (@width - 1)
+        map[x][y].add_neighbor(map[x][y + 1]) unless y >= (@height - 1)
+        map[x][y].add_neighbor(map[x][y - 1]) unless y <= 0
+        map[x][y].add_neighbor(map[x - 1][y]) unless x <= 0
+      end
     end
-    shortest
   end
 
-  def movement_options
-    directions = []
-    directions.push(:right) if can_move_right?
-    directions.push(:up) if can_move_up?
-    directions.push(:down) if can_move_down?
-    directions.push(:left) if can_move_left?
-    directions
+  def print
+    (0..@height - 1).each do |y|
+      row = []
+      (0..@width - 1).each do |x|
+        row.push(@map[x][y].height.chr)
+      end
+      puts row.join
+    end
   end
 
-  def is_at_end?
-    @current == @end
+  def get_next_unvisited
+    @all_points.filter{|x| !x.visited && !x.distance.nil? }.sort_by {|x| x.distance}[0]
   end
 
-  def can_move_up?
-    return false if @current.y <= 0
-    return false if @current.visited?(:up)
-    current_elevation = @map[@current.x][@current.y]
-    next_elevation = @map[@current.x][@current.y - 1]
-    (current_elevation + 1) >= next_elevation
-  end
-
-  def can_move_down?
-    return false if @current.y >= (@height - 1)
-    return false if @current.visited?(:down)
-    current_elevation = @map[@current.x][@current.y]
-    next_elevation = @map[@current.x][@current.y + 1]
-    (current_elevation + 1) >= next_elevation
-  end
-
-  def can_move_left?
-    return false if @current.x <= 0
-    return false if @current.visited?(:left)
-    current_elevation = @map[@current.x][@current.y]
-    next_elevation = @map[@current.x - 1][@current.y]
-    (current_elevation + 1) >= next_elevation
-  end
-
-  def can_move_right?
-    return false if @current.x >= (@width - 1)
-    return false if @current.visited?(:right)
-    current_elevation = @map[@current.x][@current.y]
-    next_elevation = @map[@current.x + 1][@current.y]
-    (current_elevation + 1) >= next_elevation
-  end
-
-
-  def self.parse_map_string(map_string)
-    [MapPoint.new(0,0), MapPoint.new(5,5), []]
+  def compute_path
+    loop do
+      distance = @current.distance + 1
+      @current.neighbors.each do |n|
+        n.set_tentative_distance(distance)
+      end
+      @current.visit
+      @current = get_next_unvisited
+    break if @current.nil? || @current.height.chr == 'a'
+    end
+    @end = @current
   end
 end
 
@@ -219,16 +144,62 @@ class MapBuilder
         c = lines[y][x]
         next if c.empty?
         if(c == 'S')
-          start_point = MapPoint.new(x,y)
+          start_point = MapPoint.new(x,y,nil)
           c = 'a'
         elsif(c == 'E')
-          end_point = MapPoint.new(x,y)
+          end_point = MapPoint.new(x,y,nil)
           c = 'z'
         end
         row.push(c.ord)
       end
       translated.push(row)
     end
-    ElevationMap.new(start_point, end_point, translated)
+    ElevationMap.new(end_point, end_point, translated)
+  end
+end
+
+
+class TrailBuilder
+  def self.from_file(file)
+    str = File.read(file)
+    from_strings(str)
+  end
+
+  def self.from_strings(str)
+    lines = str.strip.split("\n").map {|s| s.strip }
+    height = lines.length
+    width = lines[0].strip.length
+    translated = []
+    start_points = []
+    end_point = nil
+
+    (0..width - 1).each do |x|
+      row = []
+      (0..height - 1).each do |y|
+        c = lines[y][x]
+        next if c.empty?
+        if(c == 'S')
+          c = 'a'
+        elsif(c == 'E')
+          end_point = MapPoint.new(x,y,nil)
+          c = 'z'
+        end
+
+        if(c == 'a')
+          start_points.push(MapPoint.new(x,y,nil))
+        end
+        row.push(c.ord)
+      end
+      translated.push(row)
+    end
+    maps = []
+    puts "starts: #{start_points.length}"
+    n = 1
+    start_points.each do |s|
+      puts "Assembling #{n}"
+      maps.push(ElevationMap.new(s, end_point, translated))
+      n+=1
+    end
+    maps
   end
 end
